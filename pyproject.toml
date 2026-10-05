@@ -1,0 +1,11 @@
+[project]
+name = "miet-scheduler"
+version = "0.1.0"
+description = "Выгрузка учебного расписания МИЭТ (miet.ru) в календарь формата iCalendar (.ics)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28.1",
+    "ical>=14.2.0",
+]

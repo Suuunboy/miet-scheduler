@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Виртуальные окружения
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Сгенерированные календари
+*.ics
+
+# Прочее
+.DS_Store
+Thumbs.db
