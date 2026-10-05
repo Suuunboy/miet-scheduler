@@ -34,7 +34,10 @@ class MietClient:
         return [str(g) for g in data]
 
     async def schedule(self, group: str) -> dict[str, Any]:
-        """Сырое расписание группы: {"Times": [...], "Data": [...], "Semestr": "..."}."""
+        """Сырое расписание группы.
+
+        Формат: {"Times": [...], "Data": [...], "Semestr": "..."}.
+        """
         data = await self._request("GET", "/data", params={"group": group})
         if not isinstance(data, dict) or "Data" not in data or "Semestr" not in data:
             raise MietApiError("Неожиданный формат расписания")

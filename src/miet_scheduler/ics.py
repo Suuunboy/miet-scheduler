@@ -3,7 +3,7 @@
 import datetime
 import hashlib
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -26,6 +26,7 @@ def build_calendar(
     semester: Semester,
     color: str = DEFAULT_COLOR,
     color_map: Mapping[str, str] | None = None,
+    skip_dates: Collection[datetime.date] = frozenset(),
 ) -> Calendar:
     """Создаёт календарь, в котором каждое занятие — отдельное событие.
 
@@ -33,6 +34,7 @@ def build_calendar(
     color_map — цвета для отдельных предметов или типов занятий. Ключом может быть
     полное название ("Информатика [Лек]"), название предмета ("Информатика")
     или тип занятия ("Лек").
+    skip_dates — даты без занятий (праздники, каникулы).
     """
     color_map = color_map or {}
     tz = ZoneInfo(TIMEZONE)
@@ -55,6 +57,8 @@ def build_calendar(
         split = slot_counts[(lesson.week, lesson.day, lesson.slot.code)] > 1
         lesson_color = _resolve_color(lesson, color, color_map)
         for date in semester.dates_for(lesson.day, lesson.week):
+            if date in skip_dates:
+                continue
             calendar.events.append(
                 _make_event(lesson, date, tz, schedule.semester, lesson_color, split)
             )

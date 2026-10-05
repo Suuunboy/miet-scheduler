@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .api import MietApiError, MietClient, create_http_client
+from .holidays import parse_dates, public_holidays, read_dates_file, within
 from .ics import DEFAULT_COLOR, build_calendar, write_ics
 from .models import Schedule
 from .semester import Semester
@@ -25,6 +26,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    # Файлы с исключениями читаем до запросов к сайту,
+    # чтобы ошибка в них была видна сразу.
+    extra_skip: set[datetime.date] = set().union(*args.skip_dates)
+    for path in args.skip_file:
+        extra_skip |= read_dates_file(path)
+
     async with create_http_client() as http:
         client = MietClient(http)
 
@@ -41,7 +48,13 @@ async def _run(args: argparse.Namespace) -> int:
         return 1
 
     semester = Semester.from_title(schedule.semester).with_bounds(args.start, args.end)
-    calendar = build_calendar(schedule, semester, args.color, dict(args.color_map))
+    skip_dates = set(extra_skip)
+    if not args.no_holidays:
+        skip_dates |= public_holidays(semester.start, semester.end)
+
+    calendar = build_calendar(
+        schedule, semester, args.color, dict(args.color_map), skip_dates
+    )
 
     output = args.output or Path(f"{_safe_filename(group)}.ics")
     write_ics(calendar, output)
@@ -51,6 +64,8 @@ async def _run(args: argparse.Namespace) -> int:
         f"({semester.start:%d.%m.%Y}–{semester.end:%d.%m.%Y}): "
         f"{len(calendar.events)} занятий сохранено в {output}"
     )
+    if skipped := within(skip_dates, semester.start, semester.end):
+        print("Без занятий: " + ", ".join(f"{d:%d.%m.%Y}" for d in skipped))
     return 0
 
 
@@ -97,6 +112,30 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_date,
         help="дата конца семестра ГГГГ-ММ-ДД (по умолчанию 31 декабря / 31 мая)",
     )
+    parser.add_argument(
+        "--skip-dates",
+        type=_dates,
+        action="append",
+        default=[],
+        metavar="ДАТЫ",
+        help=(
+            "даты без занятий через запятую: 2026-11-05 или интервал "
+            "2026-12-29..2026-12-31; можно указать несколько раз"
+        ),
+    )
+    parser.add_argument(
+        "--skip-file",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="ФАЙЛ",
+        help="файл с датами без занятий: дата или интервал на строке, # — комментарий",
+    )
+    parser.add_argument(
+        "--no-holidays",
+        action="store_true",
+        help="не пропускать государственные праздники (ст. 112 ТК РФ)",
+    )
     return parser
 
 
@@ -104,7 +143,16 @@ def _date(value: str) -> datetime.date:
     try:
         return datetime.date.fromisoformat(value)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"ожидается дата ГГГГ-ММ-ДД: {value!r}")
+        raise argparse.ArgumentTypeError(
+            f"ожидается дата ГГГГ-ММ-ДД: {value!r}"
+        ) from None
+
+
+def _dates(value: str) -> set[datetime.date]:
+    try:
+        return parse_dates(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
 
 
 def _color(value: str) -> str:

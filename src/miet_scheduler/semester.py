@@ -62,7 +62,7 @@ class Semester:
         return (date - self.anchor).days // 7 % CYCLE_WEEKS
 
     def dates_for(self, day: int, week: int) -> Iterator[datetime.date]:
-        """Все даты семестра, которые приходятся на день недели day (1–6) недели week (0–3)."""
+        """Даты семестра для дня недели day (1–6) и недели цикла week (0–3)."""
         if not 1 <= day <= 7:
             raise ValueError(f"Некорректный день недели: {day}")
         if not 0 <= week < CYCLE_WEEKS:

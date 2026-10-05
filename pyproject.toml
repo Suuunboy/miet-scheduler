@@ -16,3 +16,17 @@ miet-scheduler = "miet_scheduler.cli:main"
 [build-system]
 requires = ["uv_build>=0.9,<0.13"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# В строках и комментариях на русском встречаются "—", "–" и похожие на латиницу буквы.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.pytest]
+testpaths = ["tests"]
