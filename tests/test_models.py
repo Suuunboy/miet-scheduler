@@ -3,7 +3,7 @@ from typing import Any
 
 from miet_scheduler.models import Lesson, Schedule
 
-from .sample import GROUP, SEMESTER_TITLE, make_entry
+from .sample import GROUP, OPTIONAL_ENTRIES, SEMESTER_TITLE, make_entry
 
 
 def test_lesson_from_api() -> None:
@@ -29,6 +29,13 @@ def test_lesson_kind_and_subject() -> None:
     lesson = Lesson.from_api(entry)
     assert lesson.kind == "Конс"
     assert lesson.subject == "[ДСТ] История России"
+
+
+def test_base_subject_drops_tags_and_kind() -> None:
+    lesson = Lesson.from_api(
+        make_entry(5, 1, 3, "[ФТД] [ДСТ] Основы права [Лек]", "А Б В", "1")
+    )
+    assert lesson.base_subject == "Основы права"
 
 
 def test_lesson_without_kind() -> None:
@@ -57,6 +64,22 @@ def test_schedule_sorts_lessons(payload: dict[str, Any]) -> None:
     keys = [(x.week, x.day, x.slot.code) for x in schedule.lessons]
     assert keys == sorted(keys)
     assert schedule.semester == SEMESTER_TITLE
+
+
+def test_without_subjects(payload: dict[str, Any]) -> None:
+    payload["Data"] = payload["Data"] + OPTIONAL_ENTRIES
+    schedule = Schedule.from_api(payload)
+
+    filtered = schedule.without_subjects(
+        ["военная подготовка", "Практическая подготовка"]
+    )
+
+    names = {x.name for x in filtered.lessons}
+    assert "Военная подготовка [Пр]" not in names
+    assert "Практическая подготовка" not in names
+    assert "[ФТД] Основы военной подготовки [Лек]" in names
+    assert len(filtered.lessons) == len(schedule.lessons) - 2
+    assert filtered.semester == schedule.semester
 
 
 def test_schedule_with_empty_data() -> None:

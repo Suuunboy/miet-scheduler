@@ -44,7 +44,13 @@ def make_entry(
     distance: bool = False,
     class_code: str = "class-code",
 ) -> dict[str, Any]:
-    surname, first, middle = teacher_full.split()
+    parts = teacher_full.split()
+    if len(parts) == 3:
+        surname, first, middle = parts
+        teacher = f"{surname} {first[0]}.{middle[0]}."
+    else:
+        # Заглушки вроде "Преподаватель УВЦ" сайт отдаёт без сокращения.
+        teacher = teacher_full
     return {
         "Day": day,
         "DayNumber": week,
@@ -53,7 +59,7 @@ def make_entry(
             "Code": class_code,
             "Name": name,
             "TeacherFull": teacher_full,
-            "Teacher": f"{surname} {first[0]}.{middle[0]}.",
+            "Teacher": teacher,
             "Form": distance,
         },
         "Group": {"Code": "000000000000001", "Name": GROUP},
@@ -82,6 +88,18 @@ ENTRIES = [
     make_entry(6, 3, 7, "[ДСТ] История России [Конс]", "Попова Елена Викторовна",
                "Виртуальная аудитория 1", class_code="hist", room_code=1,
                distance=True),
+]  # fmt: skip
+
+# Занятия, которые по умолчанию не выгружаются, и похожий факультатив,
+# который фильтр трогать не должен. Названия и заглушки — как на сайте.
+OPTIONAL_ENTRIES = [
+    make_entry(4, 0, 1, "Практическая подготовка",
+               "Преподаватель практической подготовки 1",
+               "Аудитория практической подготовки 1", class_code="practice"),
+    make_entry(5, 1, 2, "Военная подготовка [Пр]", "Преподаватель УВЦ", "УВЦ 1",
+               class_code="military"),
+    make_entry(5, 1, 3, "[ФТД] Основы военной подготовки [Лек]",
+               "Морозов Андрей Николаевич", "1204 м", class_code="military-basics"),
 ]  # fmt: skip
 
 

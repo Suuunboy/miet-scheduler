@@ -7,7 +7,7 @@ from ical.calendar_stream import IcsCalendarStream
 
 from miet_scheduler import cli
 
-from .sample import GROUP
+from .sample import ENTRIES, GROUP, OPTIONAL_ENTRIES
 
 GROUPS = [GROUP, "ТСТ-12", "П-11"]
 
@@ -113,6 +113,73 @@ def test_start_and_end(site: dict[str, Any], tmp_path: Path) -> None:
 
     assert min(dates) >= "2026-09-07"
     assert max(dates) <= "2026-10-31"
+
+
+PRACTICE = "Практическая подготовка"
+MILITARY = "Военная подготовка [Пр]"
+MILITARY_BASICS = "[ФТД] Основы военной подготовки [Лек]"
+
+
+@pytest.fixture
+def site_with_optional(site: dict[str, Any]) -> dict[str, Any]:
+    site["payload"] = {**site["payload"], "Data": ENTRIES + OPTIONAL_ENTRIES}
+    return site
+
+
+def test_optional_subjects_skipped_by_default(
+    site_with_optional: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    summaries = {e.summary for e in _generate(tmp_path)}
+
+    assert PRACTICE not in summaries
+    assert MILITARY not in summaries
+    assert MILITARY_BASICS in summaries
+    out = capsys.readouterr().out
+    assert "Не выгружено: Практическая подготовка (добавьте --include-practice)" in out
+    assert "Не выгружено: Военная подготовка (добавьте --include-military)" in out
+
+
+@pytest.mark.parametrize(
+    ("flags", "included", "excluded"),
+    [
+        (["--include-practice"], {PRACTICE}, {MILITARY}),
+        (["--include-military"], {MILITARY}, {PRACTICE}),
+        (["--include-practice", "--include-military"], {PRACTICE, MILITARY}, set()),
+    ],
+)
+def test_optional_subjects_included_by_flags(
+    site_with_optional: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    flags: list[str],
+    included: set[str],
+    excluded: set[str],
+) -> None:
+    summaries = {e.summary for e in _generate(tmp_path, *flags)}
+
+    assert included <= summaries
+    assert not excluded & summaries
+    assert capsys.readouterr().out.count("Не выгружено:") == len(excluded)
+
+
+def test_no_message_when_group_has_no_optional_subjects(
+    site: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _generate(tmp_path)
+    assert "Не выгружено" not in capsys.readouterr().out
+
+
+def test_only_optional_subjects(
+    site: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    site["payload"] = {**site["payload"], "Data": OPTIONAL_ENTRIES[:2]}
+
+    assert cli.main(["-g", GROUP]) == 1
+
+    err = capsys.readouterr().err
+    assert "--include-practice --include-military" in err
 
 
 def test_list_groups(site: dict[str, Any], capsys: pytest.CaptureFixture[str]) -> None:

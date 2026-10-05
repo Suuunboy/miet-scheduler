@@ -15,6 +15,12 @@ from .semester import Semester
 
 _COLOR_RE = re.compile(r"^[A-Za-z]+$")
 
+# Занятия, которые по умолчанию не попадают в календарь: предмет → флаг включения.
+OPTIONAL_SUBJECTS = {
+    "Практическая подготовка": "--include-practice",
+    "Военная подготовка": "--include-military",
+}
+
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
@@ -41,10 +47,28 @@ async def _run(args: argparse.Namespace) -> int:
             return 0
 
         group = await client.resolve_group(args.group)
-        schedule = Schedule.from_api(await client.schedule(group))
+        full_schedule = Schedule.from_api(await client.schedule(group))
+
+    if not full_schedule.lessons:
+        print(f"Ошибка: у группы {group} нет занятий в расписании", file=sys.stderr)
+        return 1
+
+    excluded = [
+        subject
+        for subject, flag in OPTIONAL_SUBJECTS.items()
+        if not getattr(args, _dest(flag))
+    ]
+    schedule = full_schedule.without_subjects(excluded)
+    present = {x.base_subject.casefold() for x in full_schedule.lessons}
+    hidden = [subject for subject in excluded if subject.casefold() in present]
 
     if not schedule.lessons:
-        print(f"Ошибка: у группы {group} нет занятий в расписании", file=sys.stderr)
+        flags = " ".join(OPTIONAL_SUBJECTS[subject] for subject in hidden)
+        print(
+            f"Ошибка: у группы {group} в расписании только {_join(hidden)}. "
+            f"Чтобы выгрузить их, добавьте {flags}",
+            file=sys.stderr,
+        )
         return 1
 
     semester = Semester.from_title(schedule.semester).with_bounds(args.start, args.end)
@@ -66,6 +90,8 @@ async def _run(args: argparse.Namespace) -> int:
     )
     if skipped := within(skip_dates, semester.start, semester.end):
         print("Без занятий: " + ", ".join(f"{d:%d.%m.%Y}" for d in skipped))
+    for subject in hidden:
+        print(f"Не выгружено: {subject} (добавьте {OPTIONAL_SUBJECTS[subject]})")
     return 0
 
 
@@ -131,6 +157,12 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ФАЙЛ",
         help="файл с датами без занятий: дата или интервал на строке, # — комментарий",
     )
+    for subject, flag in OPTIONAL_SUBJECTS.items():
+        parser.add_argument(
+            flag,
+            action="store_true",
+            help=f"выгрузить занятия «{subject}» (по умолчанию пропускаются)",
+        )
     parser.add_argument(
         "--no-holidays",
         action="store_true",
@@ -168,6 +200,14 @@ def _color_mapping(value: str) -> tuple[str, str]:
     if not sep or not key.strip():
         raise argparse.ArgumentTypeError(f"ожидается КЛЮЧ=ЦВЕТ: {value!r}")
     return key.strip(), _color(color.strip())
+
+
+def _dest(flag: str) -> str:
+    return flag.lstrip("-").replace("-", "_")
+
+
+def _join(subjects: list[str]) -> str:
+    return " и ".join(f"«{subject}»" for subject in subjects)
 
 
 def _safe_filename(name: str) -> str:

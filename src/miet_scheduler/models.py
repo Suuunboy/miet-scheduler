@@ -2,11 +2,14 @@
 
 import datetime
 import re
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from typing import Any
 
 # Тип занятия стоит в квадратных скобках в конце названия: "Информатика [Лек]".
 _KIND_RE = re.compile(r"\[([^\[\]]+)\]\s*$")
+# Пометки в начале названия: "[ДСТ] История России", "[ФТД] ...".
+_TAGS_RE = re.compile(r"^(?:\[[^\[\]]*\]\s*)+")
 
 KIND_NAMES = {
     "Лек": "Лекция",
@@ -86,6 +89,11 @@ class Lesson:
         """Название предмета без типа занятия: "Информатика"."""
         return _KIND_RE.sub("", self.name).strip()
 
+    @property
+    def base_subject(self) -> str:
+        """Название предмета без типа занятия и пометок: "История России"."""
+        return _TAGS_RE.sub("", self.subject).strip()
+
 
 @dataclass(frozen=True)
 class Schedule:
@@ -97,6 +105,16 @@ class Schedule:
         lessons = [Lesson.from_api(item) for item in data.get("Data") or []]
         lessons.sort(key=lambda x: (x.week, x.day, x.slot.code))
         return cls(semester=data["Semestr"], lessons=lessons)
+
+    def without_subjects(self, subjects: Iterable[str]) -> Schedule:
+        """Расписание без занятий по указанным предметам.
+
+        Сравнивается название без типа занятия и пометок, без учёта регистра:
+        "Военная подготовка" убирает и "Военная подготовка [Пр]".
+        """
+        names = {s.casefold() for s in subjects}
+        lessons = [x for x in self.lessons if x.base_subject.casefold() not in names]
+        return replace(self, lessons=lessons)
 
 
 def _parse_time(value: str) -> datetime.time:
